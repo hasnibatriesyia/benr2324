@@ -61,6 +61,23 @@ app.post('/users', async (req, res) => {
     }
 });
 
+// Login API
+app.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = await client.db('Databases').collection('users').findOne({ username });
+
+        if (!user) return res.status(404).send('Username not found');
+        if (!bcrypt.compareSync(password, user.password)) return res.status(401).send('Wrong password');
+
+        const token = jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ message: 'Login successful', token });
+    } catch (err) {
+        console.error('Error during login:', err);
+        res.status(500).send('Login failed');
+    }
+});
+
 app.get('/users', async (req, res) => {
     try {
         const users = await client.db('Databases').collection('users').find({}).toArray();
