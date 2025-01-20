@@ -40,8 +40,8 @@ const verifyJWT = (req, res, next) => {
     });
 };
 
-// Register API
-app.post('/register', async (req, res) => {
+// CRUD APIs for Users
+app.post('/users', async (req, res) => {
     try {
         const { username, password, name, email, role } = req.body;
         const hash = bcrypt.hashSync(password, 10);
@@ -61,20 +61,141 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Login API
-app.post('/login', async (req, res) => {
+app.get('/users', async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const user = await client.db('Databases').collection('users').findOne({ username });
-
-        if (!user) return res.status(404).send('Username not found');
-        if (!bcrypt.compareSync(password, user.password)) return res.status(401).send('Wrong password');
-
-        const token = jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Login successful', token });
+        const users = await client.db('Databases').collection('users').find({}).toArray();
+        res.json(users);
     } catch (err) {
-        console.error('Error during login:', err);
-        res.status(500).send('Login failed');
+        console.error('Error fetching users:', err);
+        res.status(500).send('Failed to fetch users');
+    }
+});
+
+app.patch('/users', async (req, res) => {
+    try {
+        const { username, updates } = req.body;
+        await client.db('Databases').collection('users').updateOne(
+            { username },
+            { $set: updates }
+        );
+        res.send('User updated successfully');
+    } catch (err) {
+        console.error('Error updating user:', err);
+        res.status(500).send('Failed to update user');
+    }
+});
+
+app.delete('/users', async (req, res) => {
+    try {
+        const { username } = req.body;
+        await client.db('Databases').collection('users').deleteOne({ username });
+        res.send('User deleted successfully');
+    } catch (err) {
+        console.error('Error deleting user:', err);
+        res.status(500).send('Failed to delete user');
+    }
+});
+
+// CRUD APIs for Workouts
+app.post('/workouts', verifyJWT, async (req, res) => {
+    try {
+        const { type, duration, caloriesBurned } = req.body;
+        await client.db('Databases').collection('workouts').insertOne({
+            username: req.user.username,
+            date: new Date(),
+            type,
+            duration,
+            caloriesBurned,
+        });
+        res.send('Workout added successfully');
+    } catch (err) {
+        console.error('Error adding workout:', err);
+        res.status(500).send('Failed to add workout');
+    }
+});
+
+app.get('/workouts', verifyJWT, async (req, res) => {
+    try {
+        const workouts = await client.db('Databases').collection('workouts').find({ username: req.user.username }).toArray();
+        res.json(workouts);
+    } catch (err) {
+        console.error('Error fetching workouts:', err);
+        res.status(500).send('Failed to fetch workouts');
+    }
+});
+
+app.patch('/workouts', verifyJWT, async (req, res) => {
+    try {
+        const { type, duration, caloriesBurned } = req.body;
+        await client.db('Databases').collection('workouts').updateOne(
+            { username: req.user.username },
+            { $set: { type, duration, caloriesBurned } }
+        );
+        res.send('Workout updated successfully');
+    } catch (err) {
+        console.error('Error updating workout:', err);
+        res.status(500).send('Failed to update workout');
+    }
+});
+
+app.delete('/workouts', verifyJWT, async (req, res) => {
+    try {
+        await client.db('Databases').collection('workouts').deleteOne({ username: req.user.username });
+        res.send('Workout deleted successfully');
+    } catch (err) {
+        console.error('Error deleting workout:', err);
+        res.status(500).send('Failed to delete workout');
+    }
+});
+
+// CRUD APIs for Progress
+app.post('/progress', verifyJWT, async (req, res) => {
+    try {
+        const { metric, value } = req.body;
+        await client.db('Databases').collection('progress').insertOne({
+            username: req.user.username,
+            date: new Date(),
+            metric,
+            value,
+        });
+        res.send('Progress added successfully');
+    } catch (err) {
+        console.error('Error adding progress:', err);
+        res.status(500).send('Failed to add progress');
+    }
+});
+
+app.get('/progress', verifyJWT, async (req, res) => {
+    try {
+        const progress = await client.db('Databases').collection('progress').find({ username: req.user.username }).toArray();
+        res.json(progress);
+    } catch (err) {
+        console.error('Error fetching progress:', err);
+        res.status(500).send('Failed to fetch progress');
+    }
+});
+
+app.patch('/progress', verifyJWT, async (req, res) => {
+    try {
+        const { metric, value } = req.body;
+        await client.db('Databases').collection('progress').updateOne(
+            { username: req.user.username },
+            { $set: { metric, value } }
+        );
+        res.send('Progress updated successfully');
+    } catch (err) {
+        console.error('Error updating progress:', err);
+        res.status(500).send('Failed to update progress');
+    }
+});
+
+app.delete('/progress', verifyJWT, async (req, res) => {
+    try {
+        await client.db('Databases').collection('progress').deleteOne({ username: req.user.username });
+        res.send('Progress deleted successfully');
+    } catch (err) {
+        console.error('Error deleting progress:', err);
+        res.status(500).send('Failed to delete progress');
     }
 });
 
