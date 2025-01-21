@@ -61,23 +61,6 @@ app.post('/users', async (req, res) => {
     }
 });
 
-// Login API
-app.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const user = await client.db('Databases').collection('users').findOne({ username });
-
-        if (!user) return res.status(404).send('Username not found');
-        if (!bcrypt.compareSync(password, user.password)) return res.status(401).send('Wrong password');
-
-        const token = jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Login successful', token });
-    } catch (err) {
-        console.error('Error during login:', err);
-        res.status(500).send('Login failed');
-    }
-});
-
 app.get('/users', async (req, res) => {
     try {
         const users = await client.db('Databases').collection('users').find({}).toArray();
@@ -87,6 +70,45 @@ app.get('/users', async (req, res) => {
         res.status(500).send('Failed to fetch users');
     }
 });
+
+const MAX_LOGIN_ATTEMPTS = 5; // Max attempts allowed before rejecting logins
+
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    const user = await client.db('Databases').collection('users').findOne({ username });
+
+    if (!user) {
+        return res.status(401).send('Invalid credentials');
+    }
+
+    const loginAttempts = user.loginAttempts || 0;
+
+    // Check if the maximum login attempts have been reached
+    if (loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        return res.status(403).json({
+            message: `Maximum login attempts exceeded. Please contact support.`,
+        });
+    }
+
+    const passwordMatches = bcrypt.compareSync(password, user.password);
+
+    if (!passwordMatches) {
+        // Increment login attempts
+        await client.db('Databases').collection('users').updateOne(
+            { username },
+            { $inc: { loginAttempts: 1 } }
+        );
+
+        const attemptsLeft = MAX_LOGIN_ATTEMPTS - (loginAttempts + 1);
+        return res.status(401).json({
+            message: `Invalid credentials. ${attemptsLeft} login attempts remaining.`,
+        });
+    }
+});
+    // Reset login attempts on successful login
+    await client.db('Databases').collection('users').
+
 
 app.patch('/users', async (req, res) => {
     try {
@@ -110,6 +132,18 @@ app.delete('/users', async (req, res) => {
     } catch (err) {
         console.error('Error deleting user:', err);
         res.status(500).send('Failed to delete user');
+    }
+});
+
+// Login Route
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = await client.db('Databases').collection('users').findOne({ username });
+    if (user && bcrypt.compareSync(password, user.password)) {
+        const token = jwt.sign({ username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token });
+    } else {
+        res.status(401).send('Invalid credentials');
     }
 });
 
@@ -272,5 +306,5 @@ app.delete('/healthMetrics', verifyJWT, async (req, res) => {
 
 // Start the server
 app.listen(port, () => {
-    console.log(`Health and Fitness Management System listening on port ${port}`);
+    console.log(`Health and Fitness Management System listening on port ${port}`);
 });
